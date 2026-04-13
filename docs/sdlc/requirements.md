@@ -1,123 +1,157 @@
-# PitchIt — Requirement Clarification Questions
+# PitchIt — Requirements
 
-> **Instructions for reviewer:** Fill in each `**Answer:**` field below, then
-> approve this PR to continue. You can edit the file directly on the branch, or
-> leave your answers as PR review comments (one comment per question). The
-> orchestrator will pick up your answers on the next tick.
->
-> **There are 10 questions.** Answers to Q1, Q2, Q5, and Q9 have the biggest
-> architectural impact — prioritise those if time is short.
+> Generated from clarifying questions answered 2026-04-13. Approve this PR to
+> advance to system design.
 
 ---
 
-## Q1: Where do recordings live — local only, or cloud-synced?
+## 1. Goals and Non-Goals
 
-The spec says "instant, friction-free capture" but also mentions sharing/export and
-AI transcription (which typically requires a server). If recordings are stored only
-on-device, the architecture is fully offline-first with no backend. If they sync to
-the cloud, we need auth, a storage service (e.g. S3), and a database. Getting this
-wrong means rebuilding the data layer from scratch.
+### Goals (v1)
+- **Instant audio capture** — one-tap locked recording screen; stays active until dismissed
+- **AI transcription** — on-device (offline) + Gemini API (online), auto-selected by connectivity
+- **LLM-generated titles** — meaningful titles produced automatically after recording ends
+- **Folder / project organisation** — group recordings into named projects/folders
+- **Export as Markdown** — share transcripts as `.md` files via iOS share sheet
+- **Local-first storage** — recordings and transcripts stored on-device; cloud sync deferred to v2
 
-**Answer:** 
-
----
-
-## Q2: Which AI transcription provider — on-device or cloud API?
-
-Transcription can be done on-device (Apple's Speech framework / Whisper.cpp — free,
-private, but limited accuracy) or via a cloud API (OpenAI Whisper, AssemblyAI,
-Deepgram — higher accuracy, costs money, requires internet). The choice affects
-privacy posture, latency, cost model, and whether we need a backend at all.
-
-**Answer:** 
-
----
-
-## Q3: What does "organize & search" mean — folders, tags, or full-text search?
-
-"Tag, title, and search" leaves the taxonomy open. Options range from simple
-free-text titling + keyword search, to a tag/label system (many-to-many), to
-folder/project grouping, to full semantic search over transcripts. Each option
-has different data model complexity. What's the minimum viable version for v1?
-
-**Answer:** 
+### Non-Goals (v1)
+- User accounts / authentication
+- Cloud sync (designed for later, not built now)
+- Android support
+- Social features, public profiles, likes
+- Real-time collaboration
+- Video capture
+- Web version
+- Monetisation / entitlement system
+- Siri integration (noted as future)
 
 ---
 
-## Q4: What does "share / export" mean concretely?
+## 2. Functional Requirements
 
-This could mean: (a) system share sheet — send audio file to Messages, Mail,
-AirDrop, etc.; (b) export to a specific cloud service (Google Drive, Notion,
-Dropbox); (c) generate a shareable link hosted by PitchIt. Option (a) is a
-single API call. Options (b) and (c) require OAuth integrations or a backend.
-Which scope is intended for v1?
+### FR-001 — Recording
+**Description:** The user can start a locked recording session with a single tap.
+**Acceptance criteria:**
+- Tapping the record button opens a full-screen locked recording view
+- Recording starts immediately with haptic feedback on start
+- A waveform or timer is visible while recording
+- Recording continues until the user taps Stop or Dismiss
+- Silence trimming is applied automatically at the start and end of each recording
+- No maximum recording length is enforced; the app warns when device storage falls below 500 MB
 
-**Answer:** 
+### FR-002 — Audio storage
+**Description:** Each recording is saved to local device storage in an optimal format.
+**Acceptance criteria:**
+- Audio is encoded as AAC at 128 kbps (compatible with on-device and Gemini transcription)
+- File is saved to the app's sandboxed documents directory
+- Metadata (duration, date, folder) is persisted in a local SQLite database via Expo SQLite
+- Files are retained locally until the user deletes them or cloud sync (v2) removes them
+
+### FR-003 — Transcription (dual-mode)
+**Description:** Every recording is automatically transcribed after it ends.
+**Acceptance criteria:**
+- When online: transcription is sent to Gemini API; result stored as Markdown
+- When offline: Apple Speech Recognition (on-device) is used as fallback
+- Transcription mode is selected automatically based on network reachability
+- If both fail, recording is saved without transcript and retried when connectivity returns
+- Transcript is stored as a `.md` file alongside the audio file
+
+### FR-004 — LLM-generated title
+**Description:** A meaningful title is generated for each recording using an LLM.
+**Acceptance criteria:**
+- After transcription completes, Gemini API is called with the transcript to produce a short title (≤ 60 chars)
+- If offline, a timestamp-based title is used (e.g. `Recording – Apr 13, 2026 10:32`)
+- The user can rename the title at any time
+- Title is stored in the local database
+
+### FR-005 — Folder / project organisation
+**Description:** Recordings are grouped into folders (projects).
+**Acceptance criteria:**
+- A default "Inbox" folder exists and cannot be deleted
+- Users can create, rename, and delete custom folders
+- Deleting a folder moves its recordings to Inbox (no orphan recordings)
+- Each recording belongs to exactly one folder
+- The home screen shows a list of folders with recording count
+
+### FR-006 — Playback
+**Description:** Users can play back any recording from the library.
+**Acceptance criteria:**
+- Tap a recording to open a playback screen with play/pause, scrub bar, and transcript
+- Playback speed is adjustable (0.75×, 1×, 1.25×, 1.5×, 2×)
+- Playback state is preserved if the user backgrounds the app
+
+### FR-007 — Export as Markdown
+**Description:** Users can export a recording's transcript as a `.md` file.
+**Acceptance criteria:**
+- Export option appears in the recording detail screen
+- Tapping Export opens the iOS share sheet with the `.md` file attached
+- The Markdown file includes: title, date, folder, duration, and full transcript
+- Export does not require internet access
+
+### FR-008 — Delete recording
+**Description:** Users can delete individual recordings.
+**Acceptance criteria:**
+- Swipe-to-delete and a detail-screen delete button are both supported
+- A confirmation prompt is shown before deletion
+- Deleting a recording removes the audio file and transcript from local storage
+- Deletion is not reversible
 
 ---
 
-## Q5: Is there user authentication / accounts, or is the app anonymous?
+## 3. Non-Functional Requirements
 
-If recordings stay on-device and sharing is via the system share sheet, auth may
-be unnecessary. But if cloud sync, shareable links, or cross-device access is
-needed, auth is required. Auth adds significant scope (sign-up flow, token
-management, account recovery). Should v1 have accounts?
-
-**Answer:** 
-
----
-
-## Q6: What is the intended recording UX — hold-to-record or toggle?
-
-"One-tap" is ambiguous. It could mean: (a) tap to start / tap to stop (toggle),
-(b) press-and-hold to record / release to stop (walkie-talkie style), or (c) a
-locked recording screen that stays active until dismissed. Each maps to a different
-gesture model and affects the haptics integration. Which interaction model is
-intended?
-
-**Answer:** 
+| ID | Requirement |
+|----|-------------|
+| NFR-001 | Time-to-record ≤ 1 second from tapping the record button |
+| NFR-002 | App launches to record-ready state in ≤ 2 seconds on iPhone 12 or newer |
+| NFR-003 | Transcription completes within 10 seconds for a 1-minute recording (online) |
+| NFR-004 | App does not crash or lose audio if backgrounded during recording |
+| NFR-005 | All API keys stored in environment variables / secure storage — never in source |
+| NFR-006 | iOS 16+ only (aligns with Expo SDK 51+ support matrix) |
+| NFR-007 | App functions fully offline except for Gemini transcription and LLM titling |
+| NFR-008 | No user data is sent to third-party services other than Gemini (opt-in, online-only) |
 
 ---
 
-## Q7: What audio format and quality should recordings be stored in?
+## 4. Constraints and Assumptions
 
-Expo AV supports multiple formats (AAC, MP3, WAV, etc.) with configurable
-bitrates. For musicians, quality matters (lossless or high-bitrate). For voice
-memos, AAC at 128 kbps is fine and keeps file sizes small. The format also
-affects AI transcription compatibility. Is there a target quality / format
-requirement?
-
-**Answer:** 
-
----
-
-## Q8: What is the maximum recording length, and is there a storage cap?
-
-Unlimited recordings with no cap could exhaust device storage. Should the app
-enforce a per-recording time limit (e.g. 5 min, 30 min), a total storage quota,
-or warn the user when storage is low? This affects the recording engine and any
-background-processing logic.
-
-**Answer:** 
+| # | Constraint / Assumption |
+|---|------------------------|
+| C-1 | iOS only for v1 — no Android build |
+| C-2 | No backend or auth in v1; all data is local |
+| C-3 | Gemini free tier is the only cloud API; no fallback cloud service |
+| C-4 | Cloud sync is a v2 feature; data model must be designed to accommodate it without breaking changes |
+| C-5 | Audio is deleted from device when cloud sync eventually happens (v2); local storage is not a permanent archive |
+| C-6 | Multi-language transcription is a future concern; v1 targets English |
+| C-7 | The app is for personal use; no multi-user or sharing features in v1 |
 
 ---
 
-## Q9: Which platforms are in scope — iOS only, or iOS + Android?
+## 5. Risks
 
-React Native / Expo supports both, but Expo AV and permissions behave differently
-on Android. The spec says "mobile-only" without specifying. If Android is in scope
-from day one, testing and permission-handling complexity roughly doubles. Is v1
-iOS-only or cross-platform?
-
-**Answer:** 
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| Gemini API rate limits for free tier | Medium | Medium | Cache transcription results; show clear error with retry |
+| On-device Speech Recognition accuracy for accented/fast speech | Medium | Medium | Let user edit transcript manually |
+| iOS microphone permission denial | Low | High | Clear permission rationale screen before first recording |
+| Large audio files exhausting device storage | Low | Medium | Warn at < 500 MB free; surface storage info in settings |
+| Apple Speech Recognition unavailable in certain locales | Low | Low | Fallback to raw audio save with deferred transcription |
 
 ---
 
-## Q10: Is there a monetization model that should influence the feature set?
+## 6. Success Metrics / Definition of Done
 
-A freemium model (e.g. limited recordings on free tier, unlimited on paid) would
-require an entitlement system from the start, which shapes the data model and
-onboarding flow. If the app is fully free with no plans for monetization, this
-complexity can be deferred. What's the business model?
+A feature is **done** when:
+1. It is implemented as specified above
+2. Unit tests pass (Jest + React Native Testing Library)
+3. Manual golden-path test passes on iOS Simulator and a physical device
+4. No TypeScript errors (`tsc --noEmit`)
+5. ESLint passes with zero warnings
+6. Docs / comments updated for any public module
 
-**Answer:** 
+**v1 is shippable when:**
+- FR-001 through FR-008 are all done
+- Time-to-record (NFR-001) is verified on device
+- App does not crash on backgrounding during recording
+- Export produces valid Markdown readable by standard tools
