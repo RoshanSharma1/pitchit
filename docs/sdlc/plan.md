@@ -86,7 +86,7 @@
   - `onWarning(cb)` — fires at 9-minute mark
 - **Tests:** Mock `expo-av`; verify: permission requested on `start()`; stop
   returns URI and duration; 10-min auto-stop fires; warning fires at 9 min.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
