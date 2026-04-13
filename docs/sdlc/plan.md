@@ -16,7 +16,7 @@
   `src/screens/`, `src/services/`, `src/db/`, `src/hooks/`, `src/types/`.
 - **Tests:** `npx tsc --noEmit` passes; `npx eslint .` passes; `jest` runs
   with zero test files and exits 0.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -30,7 +30,7 @@
   `MAX_RECORDING_DURATION_MS = 10 * 60 * 1000`.
 - **Tests:** Unit test that `TranscriptionStatus` union exhaustively covers all
   five values; type-check passes.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
