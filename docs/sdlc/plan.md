@@ -53,7 +53,7 @@
 - **Tests:** Jest tests covering: migration runs without error; Inbox is seeded;
   CRUD round-trips; soft delete hides row; `recoverStuckRecordings` resets
   stuck rows; deleting a folder moves recordings to Inbox.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
