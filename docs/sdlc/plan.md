@@ -69,7 +69,7 @@
   - `deleteFolder(id)` — rejects if `is_system = 1`; moves recordings to Inbox
 - **Tests:** Unit tests for each rule: blank name rejected; system folder
   delete rejected; recordings moved on delete.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
