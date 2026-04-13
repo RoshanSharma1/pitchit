@@ -1,46 +1,53 @@
-# PitchIt — System Design
+# PitchIt — System Design (v2, post-review)
 
 > Architecture for v1: local-first, iOS-only, React Native / Expo.
-> Cloud sync is out of scope but the data model is designed to accommodate it.
+> Updated after design review — offline transcription deferred, transcript stored
+> in SQLite, RecordingPipeline orchestrator added, error handling expanded.
 
 ---
 
 ## 1. Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   iOS Device                         │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │              Expo Router (UI Layer)           │   │
-│  │                                               │   │
-│  │  HomeScreen     RecordScreen   DetailScreen   │   │
-│  │  (FolderList)   (LockedRec)    (Playback+MD)  │   │
-│  └────────────────────┬─────────────────────────┘   │
-│                       │ hooks / context               │
-│  ┌────────────────────▼─────────────────────────┐   │
-│  │             Services Layer                    │   │
-│  │                                               │   │
-│  │  RecorderService  TranscriptionService        │   │
-│  │  TitleService     FolderService               │   │
-│  │  ExportService    StorageService              │   │
-│  └──────┬───────────────────────┬───────────────┘   │
-│         │                       │                    │
-│  ┌──────▼──────┐       ┌────────▼────────────────┐  │
-│  │  Expo AV    │       │   SQLite (expo-sqlite)   │  │
-│  │  (audio     │       │   + FileSystem           │  │
-│  │   record /  │       │   (expo-file-system)     │  │
-│  │   playback) │       └────────────────────────  ┘  │
-│  └─────────────┘                                     │
-│                                                      │
-│  ┌────────────────────────────────────────────────┐  │
-│  │           External APIs (online only)          │  │
-│  │                                                │  │
-│  │   Gemini API (transcription + title gen)       │  │
-│  │   Apple Speech (on-device fallback)            │  │
-│  └────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                      iOS Device                          │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │               Expo Router (UI Layer)               │  │
+│  │                                                    │  │
+│  │  HomeScreen    FolderScreen   RecordScreen         │  │
+│  │  (FolderList)  (RecList)      (LockedRec)          │  │
+│  │                               DetailScreen         │  │
+│  │                               (Playback + MD)      │  │
+│  └──────────────────────┬─────────────────────────────┘  │
+│                         │ hooks / context                 │
+│  ┌──────────────────────▼─────────────────────────────┐  │
+│  │              RecordingPipeline (orchestrator)       │  │
+│  │  Owns: record → save → queue → transcribe → title  │  │
+│  │  Handles: retries, partial failures, recovery      │  │
+│  └──────┬────────────┬───────────────┬────────────────┘  │
+│         │            │               │                    │
+│  ┌──────▼──┐  ┌──────▼──────┐  ┌────▼────────────────┐  │
+│  │Recorder │  │Transcription│  │   TitleService       │  │
+│  │Service  │  │Service      │  │   FolderService      │  │
+│  │         │  │(online only)│  │   ExportService      │  │
+│  └──────┬──┘  └──────┬──────┘  └────┬────────────────┘  │
+│         │            │               │                    │
+│  ┌──────▼────────────▼───────────────▼────────────────┐  │
+│  │          StorageService  (SQLite + FileSystem)      │  │
+│  │   expo-sqlite v2 (async)   expo-file-system        │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                           │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │         External APIs (online-only, optional)       │  │
+│  │   Gemini 1.5 Flash — transcription + title gen     │  │
+│  └─────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
+
+> **Note on API key security:** In v1 the Gemini API key is bundled via
+> `app.config.js`. This is acceptable for personal/prototype use only.
+> A backend proxy must be introduced before any public distribution.
 
 ---
 
@@ -50,46 +57,62 @@
 
 | Screen | Route | Responsibility |
 |--------|-------|---------------|
-| `HomeScreen` | `/` | List folders with recording counts; navigate to folder or start recording |
+| `HomeScreen` | `/` | List folders with recording counts; FAB to start recording |
 | `FolderScreen` | `/folder/[id]` | List recordings in a folder; swipe-to-delete |
-| `RecordScreen` | `/record` | Full-screen locked recording UI; waveform + timer; start/stop |
+| `RecordScreen` | `/record` | Full-screen locked recording; waveform + timer; tap Stop to finish |
 | `DetailScreen` | `/recording/[id]` | Playback controls, transcript view, export, rename, delete |
 
-Navigation: Expo Router file-based routing. Modal stack for RecordScreen.
+Navigation: Expo Router file-based routing. RecordScreen opens as a modal.
 
-### 2.2 Services Layer
+### 2.2 RecordingPipeline (Orchestrator)
 
-All services are plain TypeScript modules (no class instances). Each has a single responsibility and is unit-testable in isolation.
+Single entry point for the record → transcribe → title lifecycle. No UI code
+calls services directly; all calls go through the pipeline.
+
+Responsibilities:
+- Kick off recording via `RecorderService`
+- Persist recording row immediately on stop (status: `pending`)
+- Check network reachability; if online, start `TranscriptionService`
+- On transcription success, call `TitleService`
+- Update recording row with results or error details
+- On app launch: reset any `processing` rows to `pending` and retry if online
+- Enforce max recording duration (10 minutes); warn user at 9 minutes
+
+### 2.3 Services
 
 #### `RecorderService`
 - Wraps `expo-av` Audio recording API
-- Configures recording mode (AAC, 128 kbps, mono)
-- Returns `{ uri, duration }` on stop
-- Applies silence trimming via amplitude threshold check post-recording
+- Configures: AAC, 128 kbps, mono, `.m4a`
+- Enforces 10-minute hard cap: stops recording and notifies pipeline
+- Returns `{ uri, durationMs }` on stop
+- **Silence trimming removed from v1**
 
 #### `TranscriptionService`
-- Checks network reachability (`@react-native-community/netinfo`)
-- **Online:** sends audio file to Gemini API (`/v1beta/models/gemini-1.5-flash:generateContent` with inline audio)
-- **Offline:** calls Apple Speech Recognition via `expo-speech` or native module
-- Returns plain text transcript string
+- **Online only** — checks `NetInfo.isConnected` before proceeding
+- If offline: returns `{ status: 'queued' }` — pipeline retries when connected
+- Sends audio to Gemini API (base64 inline for recordings ≤ 10 min / ~15 MB)
+- Returns transcript text string
 
 #### `TitleService`
-- **Online:** calls Gemini API with transcript to generate a ≤ 60-char title
-- **Offline:** returns `"Recording – {date}"` timestamp string
+- **Online only** — calls Gemini with transcript text
+- If offline or if transcription is still pending: returns timestamp fallback
+- Returns title string (≤ 60 chars)
 
 #### `FolderService`
-- CRUD operations on `folders` table
-- Ensures "Inbox" folder always exists (seeded on first launch)
-- Moving recordings between folders
+- CRUD on `folders` table
+- `Inbox` folder seeded at first launch; protected by `is_system = 1` flag
+- Delete folder: moves recordings to Inbox before deleting
+- Cannot delete a folder where `is_system = 1`
 
 #### `StorageService`
-- Thin wrapper over `expo-sqlite` (v2 async API)
-- Runs migrations on app start
-- Exposes typed query functions; no raw SQL in UI code
+- Thin typed wrapper over `expo-sqlite` v2 async API
+- Runs schema migrations on app start (inside a transaction; rolls back on error)
+- No raw SQL outside this module
 
 #### `ExportService`
-- Assembles Markdown string from recording metadata + transcript
-- Calls `expo-sharing` to open the iOS share sheet with the `.md` file
+- Reads `transcript_text` from the recording row (no file read required)
+- Assembles Markdown with YAML front-matter
+- Writes temp `.md` to cache dir → opens iOS share sheet via `expo-sharing`
 
 ---
 
@@ -100,41 +123,60 @@ All services are plain TypeScript modules (no class instances). Each has a singl
 ```sql
 -- Folders
 CREATE TABLE folders (
-  id        TEXT PRIMARY KEY,   -- UUID v4
-  name      TEXT NOT NULL,
-  created_at INTEGER NOT NULL,  -- Unix ms
-  updated_at INTEGER NOT NULL
+  id          TEXT PRIMARY KEY,          -- UUID v4
+  name        TEXT NOT NULL,
+  is_system   INTEGER NOT NULL DEFAULT 0, -- 1 = cannot be deleted
+  created_at  INTEGER NOT NULL,           -- Unix ms
+  updated_at  INTEGER NOT NULL
 );
 
--- Seed row (Inbox cannot be deleted)
-INSERT INTO folders VALUES ('inbox', 'Inbox', <ts>, <ts>);
+INSERT INTO folders VALUES ('inbox', 'Inbox', 1, <ts>, <ts>);
 
 -- Recordings
 CREATE TABLE recordings (
-  id             TEXT PRIMARY KEY,  -- UUID v4
-  folder_id      TEXT NOT NULL REFERENCES folders(id),
-  title          TEXT NOT NULL,
-  audio_uri      TEXT NOT NULL,     -- file:// path in app documents dir
-  transcript_uri TEXT,              -- file:// path to .md file (null until done)
-  duration_ms    INTEGER NOT NULL,
+  id                   TEXT PRIMARY KEY,   -- UUID v4
+  folder_id            TEXT NOT NULL REFERENCES folders(id),
+  title                TEXT NOT NULL,
+  audio_uri            TEXT NOT NULL,      -- file:// in app documents dir
+  duration_ms          INTEGER NOT NULL,
+  transcript_text      TEXT,               -- stored in DB, not as file
   transcription_status TEXT NOT NULL
-      CHECK (transcription_status IN ('pending','processing','done','failed')),
-  created_at     INTEGER NOT NULL,
-  updated_at     INTEGER NOT NULL
+      CHECK (transcription_status IN
+             ('pending','queued','processing','done','failed')),
+  error_code           TEXT,               -- e.g. 'NETWORK_ERROR', 'API_LIMIT'
+  error_message        TEXT,
+  deleted_at           INTEGER,            -- soft delete; NULL = active
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL
 );
 
-CREATE INDEX idx_recordings_folder ON recordings(folder_id);
-CREATE INDEX idx_recordings_created ON recordings(created_at DESC);
+CREATE INDEX idx_recordings_folder   ON recordings(folder_id);
+CREATE INDEX idx_recordings_created  ON recordings(created_at DESC);
+CREATE INDEX idx_recordings_active   ON recordings(deleted_at)
+  WHERE deleted_at IS NULL;
 ```
+
+**Key changes from original design:**
+- `transcript_text` in DB (not a separate file) — eliminates file/DB inconsistency
+- `error_code` + `error_message` — granular failure tracking
+- `deleted_at` soft delete — safe deletion with recovery path
+- `is_system` on folders — Inbox protected at data layer
+- `queued` status — offline-aware transcription state
 
 ### TypeScript Types
 
 ```typescript
-export type TranscriptionStatus = 'pending' | 'processing' | 'done' | 'failed';
+export type TranscriptionStatus =
+  | 'pending'
+  | 'queued'
+  | 'processing'
+  | 'done'
+  | 'failed';
 
 export interface Folder {
   id: string;
   name: string;
+  isSystem: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -144,9 +186,12 @@ export interface Recording {
   folderId: string;
   title: string;
   audioUri: string;
-  transcriptUri: string | null;
   durationMs: number;
+  transcriptText: string | null;
   transcriptionStatus: TranscriptionStatus;
+  errorCode: string | null;
+  errorMessage: string | null;
+  deletedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -157,47 +202,74 @@ export interface Recording {
 ```
 <DocumentDirectory>/
   audio/
-    <recording-id>.m4a
-  transcripts/
-    <recording-id>.md
+    <recording-id>.m4a      ← only audio stored as file
 ```
+
+Transcripts live in SQLite only. No separate transcript files in v1.
 
 ---
 
 ## 4. Key Flows
 
-### 4.1 Record → Transcribe → Title
+### 4.1 Record → Persist → Transcribe → Title
 
 ```
 User taps Record
-  └─► RecordScreen mounts, requests mic permission if needed
-        └─► RecorderService.start()
-              └─► Expo AV begins recording (AAC 128kbps)
+  └─► RecordScreen mounts; mic permission requested if needed
+        └─► RecordingPipeline.start()
+              └─► RecorderService.start() — Expo AV begins (AAC 128kbps)
+                    └─► Timer shown; at 9 min: warn user
+                          └─► At 10 min: RecorderService auto-stops
 
-User taps Stop
-  └─► RecorderService.stop() → { uri, duration }
-        └─► Insert recording row (status: 'pending') → StorageService
-              └─► TranscriptionService.transcribe(uri)
-                    ├─ [online]  → Gemini API → transcript text
-                    └─ [offline] → Apple Speech → transcript text
-                          └─► Write transcript .md file → FileSystem
-                                └─► TitleService.generate(transcript)
-                                      ├─ [online]  → Gemini API → title
-                                      └─ [offline] → timestamp title
-                                            └─► Update recording row
-                                                  (title, transcript_uri, status: 'done')
+User taps Stop (or 10-min cap reached)
+  └─► RecorderService.stop() → { uri, durationMs }
+        └─► Insert recording row (title=timestamp, status='pending')
+              └─► RecordingPipeline checks NetInfo
+                    │
+                    ├─ [offline] → update status='queued'
+                    │              retry when NetInfo fires 'connected'
+                    │
+                    └─ [online]  → update status='processing'
+                                    └─► TranscriptionService.transcribe(uri)
+                                          ├─ success → transcript_text saved
+                                          │            status='done' (temp)
+                                          │   └─► TitleService.generate(text)
+                                          │         ├─ success → title saved
+                                          │         └─ fail    → timestamp title
+                                          │                      error_code set
+                                          └─ fail   → status='failed'
+                                                       error_code/message set
 ```
 
-### 4.2 Export
+### 4.2 App Launch Recovery
+
+```
+App launches
+  └─► StorageService.recoverStuckRecordings()
+        └─► UPDATE recordings SET status='pending'
+            WHERE status='processing' AND deleted_at IS NULL
+              └─► RecordingPipeline.retryPending()
+                    └─► [if online] transcribe each pending recording
+```
+
+### 4.3 Export
 
 ```
 User taps Export on DetailScreen
   └─► ExportService.export(recording)
-        └─► Read transcript .md from FileSystem
-              └─► Prepend YAML front-matter (title, date, folder, duration)
-                    └─► Write temp .md to cache directory
-                          └─► expo-sharing.shareAsync(tempPath)
-                                └─► iOS share sheet opens
+        └─► Build Markdown string from recording.transcriptText + metadata
+              └─► Write temp .md to CacheDirectory
+                    └─► expo-sharing.shareAsync(tempPath)
+                          └─► iOS share sheet opens
+```
+
+### 4.4 Delete Recording
+
+```
+User confirms delete
+  └─► StorageService.softDelete(id)  — sets deleted_at = now()
+        └─► expo-file-system.deleteAsync(audioUri)  — audio file removed
+              └─► transcript_text already in DB; removed with row on hard purge
 ```
 
 ---
@@ -206,55 +278,54 @@ User taps Export on DetailScreen
 
 | Technology | Choice | Rationale |
 |-----------|--------|-----------|
-| Framework | React Native + Expo SDK 51 | Cross-platform foundation; all required native APIs available |
+| Framework | React Native + Expo SDK 51 | First-party Expo; all native APIs available |
 | Routing | Expo Router v3 | File-based; typed routes; modal support |
-| Audio | `expo-av` | First-party Expo; stable AAC recording and playback |
-| Database | `expo-sqlite` (v2) | Persistent local storage; supports async API; no extra deps |
-| File system | `expo-file-system` | Manages audio and transcript files |
-| Transcription (cloud) | Gemini 1.5 Flash (free tier) | Free, capable, supports audio input |
-| Transcription (offline) | Apple Speech Recognition | On-device; no network; adequate for English v1 |
-| Sharing / export | `expo-sharing` | Native share sheet; zero OAuth required |
-| Network status | `@react-native-community/netinfo` | Detects online/offline for transcription routing |
-| Haptics | `expo-haptics` | Tap feedback on record start/stop |
-| Testing | Jest + React Native Testing Library | Standard RN test stack |
-| Linting | ESLint + `@typescript-eslint` | Enforces code quality |
-| Type checking | TypeScript strict mode | Catches type errors before runtime |
+| Audio | `expo-av` | Stable AAC recording and playback |
+| Database | `expo-sqlite` v2 | Persistent local storage; async API |
+| File system | `expo-file-system` | Audio file management |
+| Transcription | Gemini 1.5 Flash (free tier) | Free; supports audio input |
+| Offline handling | `@react-native-community/netinfo` | Detect connectivity for queue/retry |
+| Sharing | `expo-sharing` | Native share sheet; no OAuth |
+| Haptics | `expo-haptics` | Feedback on record start/stop |
+| Testing | Jest + RNTL | Standard RN test stack |
+| Linting | ESLint + `@typescript-eslint` | Code quality |
+| Type checking | TypeScript strict mode | Safety |
+
+**Removed from v1:** Apple Speech Recognition (offline transcription deferred),
+silence trimming DSP.
 
 ---
 
 ## 6. API Contracts
 
-### Gemini Transcription Request
+### Gemini Transcription
 
 ```
 POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
 Authorization: Bearer $GEMINI_API_KEY
-Content-Type: application/json
 
 {
   "contents": [{
     "parts": [
-      {
-        "inline_data": {
-          "mime_type": "audio/mp4",
-          "data": "<base64-encoded-audio>"
-        }
-      },
-      { "text": "Transcribe this audio accurately. Return only the transcript text, no commentary." }
+      { "inline_data": { "mime_type": "audio/mp4", "data": "<base64>" } },
+      { "text": "Transcribe this audio accurately. Return only the transcript text." }
     ]
   }]
 }
 ```
 
-Response: `candidates[0].content.parts[0].text`
+Response path: `candidates[0].content.parts[0].text`
 
-### Gemini Title Request
+Max audio size inline: ~15 MB (≈ 10 min at 128 kbps AAC). Hard cap in
+`RecorderService` ensures this is never exceeded.
+
+### Gemini Title
 
 ```json
 {
   "contents": [{
     "parts": [{
-      "text": "Generate a meaningful, concise title (max 60 characters) for this voice recording transcript:\n\n{transcript}\n\nReturn only the title, no quotes or punctuation."
+      "text": "Generate a concise title (max 60 chars) for this transcript:\n\n{transcript}\n\nReturn only the title."
     }]
   }]
 }
@@ -263,40 +334,49 @@ Response: `candidates[0].content.parts[0].text`
 ### Environment Variables
 
 ```
-GEMINI_API_KEY=<your-key>
+GEMINI_API_KEY=<your-key>   # .env, gitignored
 ```
 
-Accessed via `expo-constants` / `app.config.js` `extra` field. Never committed to source.
+Accessed via `app.config.js` `extra.geminiApiKey` → `Constants.expoConfig.extra.geminiApiKey`.
+
+**Security note:** This exposes the key in the app bundle. Acceptable for
+personal/prototype use. A backend proxy is required before public release.
 
 ---
 
 ## 7. Security
 
-- `GEMINI_API_KEY` stored in `.env` (gitignored); exposed to app via `app.config.js` `extra.geminiApiKey`
-- No user data is persisted on any server in v1
-- Audio files are in the app's sandboxed documents directory (not accessible to other apps)
-- Transcript `.md` files live in the same sandbox
-- Stack traces are never shown to users — errors surface as user-friendly messages
+- `GEMINI_API_KEY` in `.env` (gitignored); never committed
+- All data stored in iOS app sandbox (not accessible to other apps)
+- Soft delete retains data until explicitly purged — no accidental permanent loss
+- Errors shown to user as friendly messages; raw API errors logged to console only
+- **Known limitation:** API key is in client bundle (prototype-safe, not production-safe)
 
 ---
 
-## 8. Scalability & v2 Considerations
+## 8. v1 Scope Boundary (What's In / Out)
 
-The schema and file layout are designed to make cloud sync straightforward:
-- `id` fields are UUIDs (globally unique — safe to sync)
-- `created_at` / `updated_at` timestamps enable conflict detection
-- `audio_uri` and `transcript_uri` can be swapped for remote URLs post-sync
-- Adding a `synced_at` column to `recordings` is the only schema change needed for v2
-- Auth can be added as an optional layer without restructuring the local data model
+| Feature | v1 | v2+ |
+|---------|----|----|
+| Recording (offline) | ✅ | |
+| Local storage | ✅ | |
+| Folder organisation | ✅ | |
+| Online transcription (Gemini) | ✅ | |
+| LLM title generation | ✅ | |
+| Markdown export | ✅ | |
+| Offline transcription | ❌ | ✅ |
+| Silence trimming | ❌ | ✅ |
+| Cloud sync | ❌ | ✅ |
+| Auth / accounts | ❌ | ✅ |
+| Backend API proxy | ❌ (prototype) | ✅ (production) |
+| Android | ❌ | ✅ |
 
 ---
 
-## 9. Risks
+## 9. v2 Readiness
 
-| Risk | Mitigation |
-|------|-----------|
-| Gemini base64 audio payload size limit (~20 MB inline) | Chunk long recordings or use File API for > 10 min audio |
-| Apple Speech Recognition locale availability | Default to English; surface error if unavailable |
-| Expo SDK upgrades breaking `expo-av` recording config | Pin SDK version; test on upgrade |
-| SQLite migration failures on app update | Run migrations inside a transaction; rollback on error |
-| Background audio interrupted by iOS | Configure `AVAudioSession` category via `expo-av` Audio mode |
+- UUID PKs and `created_at`/`updated_at` timestamps support conflict-free sync
+- `deleted_at` soft delete enables sync tombstones
+- `transcription_status` state machine extends naturally with `synced` state
+- Adding `synced_at` column + backend auth is the only schema migration needed
+- `is_system` folder flag already prevents data integrity issues at scale
