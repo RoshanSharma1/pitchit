@@ -158,10 +158,31 @@
 
 ---
 
-## TASK-010: HomeScreen — folder list
+## TASK-010: UX design — screen layouts and interaction spec
+
+- **Size:** S
+- **Dependencies:** TASK-009
+- **Description:** Produce a concise UX spec document at `docs/ux.md` covering
+  all four screens. For each screen, define: layout (ASCII wireframe), key UI
+  elements (buttons, labels, icons), interaction states (empty, loading, error,
+  success), and navigation transitions. Covers:
+  - **HomeScreen** — folder list, FAB placement, long-press menu
+  - **FolderScreen** — recording list row anatomy, swipe-delete affordance,
+    status badge design (pending / processing / done / failed / queued)
+  - **RecordScreen** — locked full-screen layout, waveform placeholder, timer
+    position, 9-min warning banner, stop button size and placement
+  - **DetailScreen** — playback bar layout, speed selector, transcript section,
+    export / rename / delete button placement
+- **Tests:** `docs/ux.md` exists and contains wireframes for all four screens;
+  all status badge states are documented.
+- **Status:** [ ] pending
+
+---
+
+## TASK-011: HomeScreen — folder list
 
 - **Size:** M
-- **Dependencies:** TASK-004
+- **Dependencies:** TASK-004, TASK-010
 - **Description:** Implement `app/index.tsx` (HomeScreen).
   - Lists folders from `FolderService.getFolders()`
   - Shows folder name + recording count
@@ -175,10 +196,10 @@
 
 ---
 
-## TASK-011: FolderScreen — recording list
+## TASK-012: FolderScreen — recording list
 
 - **Size:** M
-- **Dependencies:** TASK-003, TASK-009
+- **Dependencies:** TASK-003, TASK-009, TASK-010
 - **Description:** Implement `app/folder/[id].tsx`.
   - Lists recordings for the folder ordered by `created_at DESC`
   - Each row: title, duration, transcription status badge, date
@@ -191,10 +212,10 @@
 
 ---
 
-## TASK-012: RecordScreen — locked recording UI
+## TASK-013: RecordScreen — locked recording UI
 
 - **Size:** M
-- **Dependencies:** TASK-009
+- **Dependencies:** TASK-009, TASK-010
 - **Description:** Implement `app/record.tsx` (modal screen).
   - Requests mic permission on mount; shows permission-denied state if refused
   - Calls `RecordingPipeline.start()` on mount
@@ -208,10 +229,10 @@
 
 ---
 
-## TASK-013: DetailScreen — playback, transcript, export
+## TASK-014: DetailScreen — playback, transcript, export
 
 - **Size:** M
-- **Dependencies:** TASK-008, TASK-009
+- **Dependencies:** TASK-008, TASK-009, TASK-010
 - **Description:** Implement `app/recording/[id].tsx`.
   - Loads recording from StorageService
   - Playback: play/pause, scrub bar, speed selector (0.75×, 1×, 1.25×, 1.5×,
@@ -229,7 +250,7 @@
 
 ---
 
-## TASK-014: App launch recovery + NetInfo retry wiring
+## TASK-015: App launch recovery + NetInfo retry wiring
 
 - **Size:** S
 - **Dependencies:** TASK-009
@@ -245,10 +266,10 @@
 
 ---
 
-## TASK-015: End-to-end integration smoke test
+## TASK-016: End-to-end integration smoke test
 
 - **Size:** S
-- **Dependencies:** TASK-001 through TASK-014
+- **Dependencies:** TASK-001 through TASK-015
 - **Description:** Write a Jest integration test that wires real
   `StorageService` (in-memory SQLite) with mocked `RecorderService`,
   `TranscriptionService`, and `TitleService` to verify the full pipeline:
