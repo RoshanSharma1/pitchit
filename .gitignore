@@ -3,3 +3,20 @@
 .sdlc/
 CLAUDE.md
 .claude/
+
+# Expo / React Native
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+*.iml
