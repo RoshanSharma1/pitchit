@@ -4,6 +4,9 @@
 > approve this PR to continue. You can edit the file directly on the branch, or
 > leave your answers as PR review comments (one comment per question). The
 > orchestrator will pick up your answers on the next tick.
+>
+> **There are 10 questions.** Answers to Q1, Q2, Q5, and Q9 have the biggest
+> architectural impact — prioritise those if time is short.
 
 ---
 
