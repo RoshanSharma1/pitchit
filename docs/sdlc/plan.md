@@ -5,6 +5,11 @@
 
 ---
 
+# STORY-001: Project foundation — bootstrap, types, data, and audio services
+
+User-facing capability: App can be launched, data persisted, and audio recorded
+with full folder management.
+
 ## TASK-001: Expo project bootstrap
 
 - **Size:** S
@@ -16,7 +21,7 @@
   `src/screens/`, `src/services/`, `src/db/`, `src/hooks/`, `src/types/`.
 - **Tests:** `npx tsc --noEmit` passes; `npx eslint .` passes; `jest` runs
   with zero test files and exits 0.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -30,7 +35,7 @@
   `MAX_RECORDING_DURATION_MS = 10 * 60 * 1000`.
 - **Tests:** Unit test that `TranscriptionStatus` union exhaustively covers all
   five values; type-check passes.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -53,7 +58,7 @@
 - **Tests:** Jest tests covering: migration runs without error; Inbox is seeded;
   CRUD round-trips; soft delete hides row; `recoverStuckRecordings` resets
   stuck rows; deleting a folder moves recordings to Inbox.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -69,7 +74,7 @@
   - `deleteFolder(id)` — rejects if `is_system = 1`; moves recordings to Inbox
 - **Tests:** Unit tests for each rule: blank name rejected; system folder
   delete rejected; recordings moved on delete.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -86,9 +91,14 @@
   - `onWarning(cb)` — fires at 9-minute mark
 - **Tests:** Mock `expo-av`; verify: permission requested on `start()`; stop
   returns URI and duration; 10-min auto-stop fires; warning fires at 9 min.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
+
+# STORY-002: Transcription, title, export, and recording pipeline
+
+User-facing capability: Recordings are automatically transcribed, titled, and
+exportable; the full record→transcribe→title lifecycle is orchestrated reliably.
 
 ## TASK-006: TranscriptionService
 
@@ -105,7 +115,7 @@
 - **Tests:** Mock `expo-file-system` and `fetch`; verify: correct Gemini
   payload shape; transcript text extracted from response; each error code
   mapped correctly.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -119,7 +129,7 @@
   - If offline or API fails: returns `"Recording – {MMM D, YYYY h:mm A}"`
 - **Tests:** Mock fetch; verify: title truncated to 60 chars; offline fallback
   returns timestamp format; API failure returns fallback.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -133,7 +143,7 @@
     writes to `CacheDirectory/<id>.md`, calls `expo-sharing.shareAsync()`
 - **Tests:** Verify Markdown output matches expected format for a sample
   recording; sharing called with correct path.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -154,9 +164,14 @@
 - **Tests:** Mock all services; verify: offline path sets `queued`; online path
   runs full pipeline; title failure still saves transcript; `retryQueued`
   processes pending rows; partial failure sets correct `error_code`.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
+
+# STORY-003: UX design specification
+
+User-facing capability: A clear, reviewed UX spec guides all screen
+implementations with wireframes and interaction states.
 
 ## TASK-010: UX design — screen layouts and interaction spec
 
@@ -175,9 +190,14 @@
     export / rename / delete button placement
 - **Tests:** `docs/ux.md` exists and contains wireframes for all four screens;
   all status badge states are documented.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
+
+# STORY-004: Home and folder screens
+
+User-facing capability: Users can browse folders and recordings, create/rename/
+delete folders, and navigate between them.
 
 ## TASK-011: HomeScreen — folder list
 
@@ -211,6 +231,11 @@
 - **Status:** [ ] pending
 
 ---
+
+# STORY-005: Record and detail screens
+
+User-facing capability: Users can record new audio and play back, view
+transcripts, rename, export, and delete recordings.
 
 ## TASK-013: RecordScreen — locked recording UI
 
@@ -249,6 +274,11 @@
 - **Status:** [ ] pending
 
 ---
+
+# STORY-006: App wiring and integration testing
+
+User-facing capability: App recovers stuck recordings on launch and retries
+queued transcriptions on reconnect; full pipeline verified end-to-end.
 
 ## TASK-015: App launch recovery + NetInfo retry wiring
 
