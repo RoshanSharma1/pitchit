@@ -8,6 +8,7 @@ export default function RootLayout() {
   useEffect(() => {
     // On mount: recover stuck recordings then retry any pending/queued ones.
     async function recover() {
+      await StorageService.init();
       await StorageService.recoverStuckRecordings();
       await RecordingPipeline.retryQueued();
     }
