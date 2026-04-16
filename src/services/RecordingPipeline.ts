@@ -9,7 +9,7 @@
  *   - onRecordingUpdate(cb)  event emitter for UI status changes
  */
 
-import * as Crypto from 'expo-crypto';
+import { randomUUID } from '@/utils/uuid';
 import * as RecorderService from './RecorderService';
 import * as StorageService from '@/db/StorageService';
 import { transcribe, isOnline } from './TranscriptionService';
@@ -46,7 +46,7 @@ export async function stop(folderId: string): Promise<Recording> {
 
   const now = Date.now();
   const recording: Recording = {
-    id: Crypto.randomUUID(),
+    id: randomUUID(),
     folder_id: folderId,
     title: '',
     audio_uri: uri,
