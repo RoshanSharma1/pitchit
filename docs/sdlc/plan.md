@@ -190,7 +190,7 @@ implementations with wireframes and interaction states.
     export / rename / delete button placement
 - **Tests:** `docs/ux.md` exists and contains wireframes for all four screens;
   all status badge states are documented.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
