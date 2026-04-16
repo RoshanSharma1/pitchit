@@ -97,6 +97,7 @@ export async function transcribe(audioUri: string): Promise<{ text: string }> {
   if (!response.ok) {
     const errorCode = response.status === 429 ? 'API_LIMIT' : 'API_ERROR';
     const detail = await response.text().catch(() => String(response.status));
+    console.error(`[TranscriptionService] HTTP ${response.status}:`, detail);
     throw new TranscriptionError(errorCode, `Gemini API error ${response.status}: ${detail}`);
   }
 
@@ -109,6 +110,7 @@ export async function transcribe(audioUri: string): Promise<{ text: string }> {
 
   const text = _extractText(data);
   if (text === null) {
+    console.error('[TranscriptionService] Unexpected response shape:', JSON.stringify(data).slice(0, 300));
     throw new TranscriptionError('API_ERROR', 'No transcript text in Gemini response');
   }
 
@@ -120,6 +122,7 @@ export async function transcribe(audioUri: string): Promise<{ text: string }> {
 function _getApiKey(): string {
   const key = Constants.expoConfig?.extra?.geminiApiKey as string | undefined;
   if (!key) {
+    console.error('[TranscriptionService] GEMINI_API_KEY is not configured. expoConfig.extra:', Constants.expoConfig?.extra);
     throw new TranscriptionError('API_ERROR', 'GEMINI_API_KEY is not configured');
   }
   return key;
