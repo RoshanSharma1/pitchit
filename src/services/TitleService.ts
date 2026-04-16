@@ -9,7 +9,7 @@
 import Constants from 'expo-constants';
 import { isOnline } from './TranscriptionService';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_BASE_URL =
   'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_TITLE_LENGTH = 60;
