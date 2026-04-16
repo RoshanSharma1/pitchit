@@ -10,6 +10,7 @@ import { INBOX_FOLDER_ID } from '@/constants';
 import type { Folder, Recording, TranscriptionStatus } from '@/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let initPromise: Promise<void> | null = null;
 
 // ---------------------------------------------------------------------------
 // Init & migrations
@@ -17,9 +18,13 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 /** Open the database and run all schema migrations. Idempotent. */
 export async function init(): Promise<void> {
-  if (db) return;
-  db = await SQLite.openDatabaseAsync('pitchit.db');
-  await _runMigrations(db);
+  if (!initPromise) {
+    initPromise = SQLite.openDatabaseAsync('pitchit.db').then(async (opened) => {
+      db = opened;
+      await _runMigrations(db);
+    });
+  }
+  return initPromise;
 }
 
 /** Exposed for testing — returns the active DB instance (throws if not init'd). */
@@ -28,11 +33,18 @@ export function _getDb(): SQLite.SQLiteDatabase {
   return db;
 }
 
+/** Returns a ready DB, auto-initialising if needed. */
+async function _db(): Promise<SQLite.SQLiteDatabase> {
+  await init();
+  return db!;
+}
+
 /** For tests: close and reset the singleton so init() can be called again. */
 export async function _reset(): Promise<void> {
   if (db) {
     await db.closeAsync();
     db = null;
+    initPromise = null;
   }
 }
 
@@ -93,7 +105,7 @@ async function _runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
 
 /** Return all non-deleted folders with a recording_count aggregate. */
 export async function getFolders(): Promise<Folder[]> {
-  const database = _getDb();
+  const database = await _db();
   const rows = await database.getAllAsync<{
     id: string;
     name: string;
@@ -115,7 +127,7 @@ export async function getFolders(): Promise<Folder[]> {
 
 /** Insert a new folder row. */
 export async function insertFolder(folder: Omit<Folder, 'recording_count'>): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   await database.runAsync(
     'INSERT INTO folders (id, name, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
     [folder.id, folder.name, folder.is_system, folder.created_at, folder.updated_at],
@@ -127,7 +139,7 @@ export async function updateFolder(
   id: string,
   patch: Partial<Pick<Folder, 'name' | 'updated_at'>>,
 ): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   const fields = Object.keys(patch) as Array<keyof typeof patch>;
   const setClauses = fields.map((f) => `${f} = ?`).join(', ');
   const values = [...fields.map((f) => patch[f]), id];
@@ -139,7 +151,7 @@ export async function updateFolder(
  * Runs in a single transaction.
  */
 export async function deleteFolder(id: string): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   const now = Date.now();
   await database.withTransactionAsync(async () => {
     await database.runAsync(
@@ -156,7 +168,7 @@ export async function deleteFolder(id: string): Promise<void> {
 
 /** Return active (non-deleted) recordings for a folder, newest first. */
 export async function getRecordingsForFolder(folderId: string): Promise<Recording[]> {
-  const database = _getDb();
+  const database = await _db();
   const rows = await database.getAllAsync<RecordingRow>(
     `SELECT * FROM recordings
      WHERE folder_id = ? AND deleted_at IS NULL
@@ -168,7 +180,7 @@ export async function getRecordingsForFolder(folderId: string): Promise<Recordin
 
 /** Return a single recording by id (includes soft-deleted). */
 export async function getRecording(id: string): Promise<Recording | null> {
-  const database = _getDb();
+  const database = await _db();
   const row = await database.getFirstAsync<RecordingRow>(
     'SELECT * FROM recordings WHERE id = ?',
     [id],
@@ -178,7 +190,7 @@ export async function getRecording(id: string): Promise<Recording | null> {
 
 /** Insert a new recording row. */
 export async function insertRecording(recording: Recording): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   await database.runAsync(
     `INSERT INTO recordings
      (id, folder_id, title, audio_uri, duration_ms, transcript_text,
@@ -217,7 +229,7 @@ export async function updateRecording(
     >
   >,
 ): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   const fields = Object.keys(patch) as Array<keyof typeof patch>;
   const setClauses = fields.map((f) => `${f} = ?`).join(', ');
   const values = [...fields.map((f) => patch[f]), id];
@@ -226,7 +238,7 @@ export async function updateRecording(
 
 /** Soft-delete a recording by setting deleted_at. */
 export async function softDeleteRecording(id: string): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   await database.runAsync(
     'UPDATE recordings SET deleted_at = ?, updated_at = ? WHERE id = ?',
     [Date.now(), Date.now(), id],
@@ -238,7 +250,7 @@ export async function softDeleteRecording(id: string): Promise<void> {
  * will be retried on the next pipeline run (called at app launch).
  */
 export async function recoverStuckRecordings(): Promise<void> {
-  const database = _getDb();
+  const database = await _db();
   const now = Date.now();
   await database.runAsync(
     `UPDATE recordings
