@@ -54,6 +54,7 @@
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1",
       "^../../../app/index$": "<rootDir>/app/index.tsx",
+      "^../../../app/_layout$": "<rootDir>/app/_layout.tsx",
       "^../../../app/folder/\\[id\\]$": "<rootDir>/app/folder/[id].tsx",
       "^../../../app/record$": "<rootDir>/app/record.tsx",
       "^../../../app/recording/\\[id\\]$": "<rootDir>/app/recording/[id].tsx"
