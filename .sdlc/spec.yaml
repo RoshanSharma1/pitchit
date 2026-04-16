@@ -1,0 +1,17 @@
+project_name: PitchIt
+description: An app focused on instant, friction-free audio capture to fuel future projects
+users: Solo creators — musicians, podcasters, and idea-havers who need to capture fleeting thoughts instantly
+goals:
+  - MVP audio capture — one-tap record, stop, and playback end-to-end
+  - Organize & search — tag, title, and search recordings so users can find ideas later
+  - Share / export — send recordings to other apps, people, or cloud storage
+  - AI transcription — automatically transcribe recordings to text for search and reuse
+non_goals:
+  - Real-time collaboration (multiple users recording/editing simultaneously)
+  - Video capture (audio only)
+  - Web version (mobile-only for now)
+  - Social / feed features (no public profiles, likes, or social discovery)
+tech_stack: React Native, Expo Router, Expo AV, Haptics
+repo: RoshanSharma1/pitchit
+slack_webhook: ""  # set via SLACK_WEBHOOK env var
+executor: claude-code
