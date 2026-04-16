@@ -164,7 +164,7 @@ exportable; the full record→transcribe→title lifecycle is orchestrated relia
 - **Tests:** Mock all services; verify: offline path sets `queued`; online path
   runs full pipeline; title failure still saves transcript; `retryQueued`
   processes pending rows; partial failure sets correct `error_code`.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
