@@ -92,7 +92,7 @@ describe('stop', () => {
 
   it('returns the newly created recording', async () => {
     const rec = await Pipeline.stop('folder-1');
-    expect(rec.id).toMatch(/^test-uuid-\d+$/);
+    expect(rec.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(rec.transcription_status).toBe('pending');
   });
 });
