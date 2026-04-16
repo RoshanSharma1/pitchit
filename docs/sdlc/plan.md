@@ -5,6 +5,11 @@
 
 ---
 
+# STORY-001: Project foundation — bootstrap, types, data, and audio services
+
+User-facing capability: App can be launched, data persisted, and audio recorded
+with full folder management.
+
 ## TASK-001: Expo project bootstrap
 
 - **Size:** S
@@ -90,6 +95,11 @@
 
 ---
 
+# STORY-002: Transcription, title, export, and recording pipeline
+
+User-facing capability: Recordings are automatically transcribed, titled, and
+exportable; the full record→transcribe→title lifecycle is orchestrated reliably.
+
 ## TASK-006: TranscriptionService
 
 - **Size:** M
@@ -105,7 +115,7 @@
 - **Tests:** Mock `expo-file-system` and `fetch`; verify: correct Gemini
   payload shape; transcript text extracted from response; each error code
   mapped correctly.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -119,7 +129,7 @@
   - If offline or API fails: returns `"Recording – {MMM D, YYYY h:mm A}"`
 - **Tests:** Mock fetch; verify: title truncated to 60 chars; offline fallback
   returns timestamp format; API failure returns fallback.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
@@ -158,6 +168,11 @@
 
 ---
 
+# STORY-003: UX design specification
+
+User-facing capability: A clear, reviewed UX spec guides all screen
+implementations with wireframes and interaction states.
+
 ## TASK-010: UX design — screen layouts and interaction spec
 
 - **Size:** S
@@ -178,6 +193,11 @@
 - **Status:** [ ] pending
 
 ---
+
+# STORY-004: Home and folder screens
+
+User-facing capability: Users can browse folders and recordings, create/rename/
+delete folders, and navigate between them.
 
 ## TASK-011: HomeScreen — folder list
 
@@ -211,6 +231,11 @@
 - **Status:** [ ] pending
 
 ---
+
+# STORY-005: Record and detail screens
+
+User-facing capability: Users can record new audio and play back, view
+transcripts, rename, export, and delete recordings.
 
 ## TASK-013: RecordScreen — locked recording UI
 
@@ -249,6 +274,11 @@
 - **Status:** [ ] pending
 
 ---
+
+# STORY-006: App wiring and integration testing
+
+User-facing capability: App recovers stuck recordings on launch and retries
+queued transcriptions on reconnect; full pipeline verified end-to-end.
 
 ## TASK-015: App launch recovery + NetInfo retry wiring
 
