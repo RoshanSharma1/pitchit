@@ -7,7 +7,7 @@
  *   - Recordings are moved to Inbox before a folder is deleted
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import * as Crypto from 'expo-crypto';
 import * as StorageService from '@/db/StorageService';
 import type { Folder } from '@/types';
 
@@ -26,7 +26,7 @@ export async function createFolder(name: string): Promise<Folder> {
 
   const now = Date.now();
   const folder: Omit<Folder, 'recording_count'> = {
-    id: uuidv4(),
+    id: Crypto.randomUUID(),
     name: trimmed,
     is_system: 0,
     created_at: now,
