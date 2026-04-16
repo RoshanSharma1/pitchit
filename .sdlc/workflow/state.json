@@ -1,5 +1,5 @@
 {
-  "state": "story_in_progress",
+  "state": "done",
   "retry_count": 0,
   "approval_needed": false,
   "blocked_reason": null,
@@ -57,7 +57,7 @@
     "test_report": null,
     "review_summary": null
   },
-  "last_updated": "2026-04-16T06:04:57.000000+00:00",
+  "last_updated": "2026-04-16T06:30:55.000000+00:00",
   "history": [
     {
       "state": "draft_requirement",
@@ -94,7 +94,11 @@
     {
       "state": "story_in_progress",
       "timestamp": "2026-04-16T04:59:39.137069+00:00"
+    },
+    {
+      "state": "done",
+      "timestamp": "2026-04-16T06:30:55.000000+00:00"
     }
   ],
-  "current_story": "STORY-006"
+  "current_story": null
 }
