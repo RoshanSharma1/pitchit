@@ -30,7 +30,7 @@ export class TranscriptionError extends Error {
 
 // ── Gemini constants ──────────────────────────────────────────────────────────
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_BASE_URL =
   'https://generativelanguage.googleapis.com/v1beta/models';
 
