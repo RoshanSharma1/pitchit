@@ -5,7 +5,7 @@
 
 ---
 
-# STORY-001: Project foundation — bootstrap, types, data, and audio services
+# STORY-004: Project foundation — bootstrap, types, data, and audio services
 
 User-facing capability: App can be launched, data persisted, and audio recorded
 with full folder management.
@@ -95,7 +95,7 @@ with full folder management.
 
 ---
 
-# STORY-002: Transcription, title, export, and recording pipeline
+# STORY-005: Transcription, title, export, and recording pipeline
 
 User-facing capability: Recordings are automatically transcribed, titled, and
 exportable; the full record→transcribe→title lifecycle is orchestrated reliably.
@@ -168,7 +168,7 @@ exportable; the full record→transcribe→title lifecycle is orchestrated relia
 
 ---
 
-# STORY-003: UX design specification
+# STORY-006: UX design specification
 
 User-facing capability: A clear, reviewed UX spec guides all screen
 implementations with wireframes and interaction states.
@@ -194,7 +194,7 @@ implementations with wireframes and interaction states.
 
 ---
 
-# STORY-004: Home and folder screens
+# STORY-007: Home and folder screens
 
 User-facing capability: Users can browse folders and recordings, create/rename/
 delete folders, and navigate between them.
@@ -232,7 +232,7 @@ delete folders, and navigate between them.
 
 ---
 
-# STORY-005: Record and detail screens
+# STORY-008: Record and detail screens
 
 User-facing capability: Users can record new audio and play back, view
 transcripts, rename, export, and delete recordings.
@@ -275,7 +275,7 @@ transcripts, rename, export, and delete recordings.
 
 ---
 
-# STORY-006: App wiring and integration testing
+# STORY-009: App wiring and integration testing
 
 User-facing capability: App recovers stuck recordings on launch and retries
 queued transcriptions on reconnect; full pipeline verified end-to-end.
