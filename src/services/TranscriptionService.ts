@@ -111,7 +111,8 @@ export async function transcribe(audioUri: string): Promise<{ text: string }> {
   const text = _extractText(data);
   if (text === null) {
     console.error('[TranscriptionService] Unexpected response shape:', JSON.stringify(data).slice(0, 300));
-    throw new TranscriptionError('API_ERROR', 'No transcript text in Gemini response');
+    // Gemini 2.5 returns empty content.parts for silent/empty audio
+    return { text: '(no speech detected)' };
   }
 
   return { text };
