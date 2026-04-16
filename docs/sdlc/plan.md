@@ -143,7 +143,7 @@ exportable; the full record→transcribe→title lifecycle is orchestrated relia
     writes to `CacheDirectory/<id>.md`, calls `expo-sharing.shareAsync()`
 - **Tests:** Verify Markdown output matches expected format for a sample
   recording; sharing called with correct path.
-- **Status:** [ ] pending
+- **Status:** [x] done
 
 ---
 
